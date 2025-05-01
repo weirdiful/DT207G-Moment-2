@@ -1,13 +1,14 @@
 const express = require('express');
 const cors = require("cors");
 const bodyParser = require('body-parser');
-const mysql = require('mysql2');
+const sqlite3 = require('sqlite');
 
 const app = express();
 const port = 3000;
 
 app.use(cors());
 app.use(bodyParser.json());
+app.use(express.json());
 
 const db =mysql.createConnection({
     host: 'localhost',
