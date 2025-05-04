@@ -1,66 +1,99 @@
 const express = require('express');
 const cors = require("cors");
-const bodyParser = require('body-parser');
-const sqlite3 = require('sqlite');
+const initDB = require('./db');
+
 
 const app = express();
 const port = 3000;
 
 app.use(cors());
-app.use(bodyParser.json());
 app.use(express.json());
 
-const db =mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'workCV'
-})
 
-//Kolla anslutning
 
-db.connect(err => {
-    if (err) {
-        console.error('Anslutningen misslyckades: ', err);
-        return;
-    }
-    console.log('Ansluten till databasen.');
+let db;
+initDB().then(database => {
+  db = database;
+
+  app.listen(port, () => {
+    console.log('Servern körs på port ' + port);
+  });
 });
-
-//Routes
 
 app.get("/api", (req, res) => {
-    res.json({message: "Welcome" })
+  res.json({ message: "Welcome" });
 });
 
-app.get("/api/workCV", (req, res) => {
-    res.json({message: "Get table work experience" })
+app.get("/api/workCV", async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM workexperience');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post("/api/workCV", (req, res) => {
-    let id = req.body.id;
-    let companyname = req.body.companyname;
-    let jobtitle = req.body.jobtitle;
-    let location = req.body.location;
-    let startdate = req.body.startdate;
-    let enddate = req.body.enddate;
-    let description = req.body.description;
+app.post("/api/workCV", async (req, res) => {
+  const { companyname, jobtitle, location, startdate, enddate, description } = req.body;
+  if (!companyname || !jobtitle || !location || !startdate || !enddate) {
+    return res.status(400).json({ message: "Obligatoriska fält saknas" });
+  }
 
-    if (!id || !companyname) {
-        return res.status(400).json({message: "Alla obligatoriska fält måste fyllas i."});
-    }
+  try {
+    const result = await db.run(
+      `INSERT INTO workexperience (companyname, jobtitle, location, startdate, enddate, description)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [companyname, jobtitle, location, startdate, enddate, description]
+    );
+    res.status(201).json({
+         message: "Arbetserfarenhet tillagd", 
+         work: {
+            id: result.lastID,
+            companyname, 
+            jobtitle,
+            location, 
+            startdate, 
+            enddate, 
+            description
 
-    res.json({message: "Work experience added" })
+         }
+         });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put("/api/workCV/:id", (req, res) => {
-    res.json({message: "Work experience updated: " + req.params.id})
+app.put("/api/workCV/:id", async (req, res) => {
+  const { id } = req.params;
+  const { companyname, jobtitle, location, startdate, enddate, description } = req.body;
+  if (!companyname || !jobtitle || !location || !startdate || !enddate) {
+    return res.status(400).json({ message: "Obligatoriska fält saknas" });
+  }
+
+  try {
+    const result = await db.run(
+      `UPDATE workexperience
+       SET companyname = ?, jobtitle = ?, location = ?, startdate = ?, enddate = ?, description = ?
+       WHERE id = ?`,
+      [companyname, jobtitle, location, startdate, enddate, description, id]
+    );
+
+    if (result.changes === 0) return res.status(404).json({ message: "Ingen post hittades" });
+
+    res.json({ message: "Arbetserfarenhet uppdaterad" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.delete("/api/workCV/:id", (req, res) => {
-    res.json({message: "Work experience deleted: " + req.params.id})
-});
+app.delete("/api/workCV/:id", async (req, res) => {
+  const { id } = req.params;
 
-app.listen(port, () => {
-    console.log('Servern startad på port: ' + port)
+  try {
+    const result = await db.run(`DELETE FROM workexperience WHERE id = ?`, id);
+    if (result.changes === 0) return res.status(404).json({ message: "Ingen post hittades" });
+    res.json({ message: "Arbetserfarenhet borttagen" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
